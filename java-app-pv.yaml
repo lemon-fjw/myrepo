@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: java-app-mysql-pv
+  labels:
+    name: java-app
+spec:
+  nfs:
+    path: /mnt/nfs_data/volumes/java-app
+    server: 10.10.15.20
+  accessModes: ["ReadWriteOnce","ReadWriteMany"]
+  capacity:
+    storage: 1Gi

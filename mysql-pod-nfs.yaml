@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mysql-pod-nfs
+spec:
+  containers:
+  - name: mysql-pod-nfs
+    image: registry.ocp311.ocp.local:5000/testimages/mysql:5.7
+    imagePullPolicy: IfNotPresent
+    env:
+    - name: MYSQL_ROOT_PASSWORD
+      value: "123456"
+    ports:
+    - containerPort: 3306
+    volumeMounts:
+    - name: data
+      mountPath: /var/lib/mysql
+  volumes:
+  - name: data
+    nfs:
+      path: /mnt/nfs_data/volumes/vol001
+      server: 10.10.15.20

@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: nginx-template
+  annotations:
+    description: "template demo"
+    tags: "template,web,proxy"
+objects: 
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    name: nginx-deployment
+  labels:
+    app: nginx
+  spec:
+    selector: 
+      matchLabels: 
+        app: nginx
+    replicas: ${REPLICAS}
+    template: 
+      metadata: 
+        labels: 
+          app: nginx
+      spec:
+        containers:
+        - image: ${IMAGE_URL}
+          name: nginx
+          ports:
+          - containerPort: 80
+            protocol: TCP
+
+- apiVersion: v1
+  kind: Service
+  metadata: 
+    name: nginx-svc
+  spec:
+    type: ClusterIP
+    ports:
+    - port: 80
+      targetPort: 80
+    selector:
+      app: nginx
+
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    labels:
+      app: nginx
+    name: nginx-route
+  spec:
+    host: ${ROUTE_NAME}.apps.ocp311.centos.local
+    port:
+      targetPort: 80-tcp
+    to:
+      kind: Service
+      name: nginx-svc
+      weight: 100
+
+parameters:
+- name: IMAGE_URL
+  description: input the image url
+  displayName: IMAGE_URL
+
+- name: ROUTE_NAME
+  description: input you route name 
+  displayName: ROUTE_NAME
+
+- name: REPLICAS
+  description: input the replicas number
+  displayName: REPLICAS
+
+labels: 
+  app: nginx

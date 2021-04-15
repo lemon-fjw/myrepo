@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: mysql-persistent
+  name: svc-mysql
+  namespace: test-mysql
+spec:
+  ports:
+  - name: mysql
+    port: 3306
+    nodePort: 30920
+    protocol: TCP
+    targetPort: 3306
+  selector:
+    name: svc-mysql
+  sessionAffinity: None
+  type: NodePort

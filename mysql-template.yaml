@@ -1,0 +1,188 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: mysql-template
+metadata:
+  name: mysql-template
+  namespace: openshift
+objects:
+
+#定义mysql组件服务对象
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    ports:
+    - port: 3306
+      targetPort: 3306
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}
+      
+#定义mysql组件镜像ImageStream（docker file in source）
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+    
+#定义mysql的dockerfile in source构建对象
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: ${APPLICATION_NAME}:latest
+    source:
+      git:
+        ref: ${MYSQL_REPOSITORY_REF}
+        uri: ${MYSQL_REPOSITORY_URL}
+      type: Git
+    strategy:
+      dockerStrategy:
+        from:
+          kind: ImageStreamTag
+          name: mysql:5.7
+          namespace: ${IMAGE_STREAM_NAMESPACE}
+      type: Docker
+    triggers:
+    - type: ConfigChange
+    - imageChange: {}
+      type: ImageChange
+
+#定义mysql组件deploymentconfig       
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      deploymentConfig: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
+  spec:
+    replicas: 1
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        labels:
+          application: ${APPLICATION_NAME}
+          deploymentConfig: ${APPLICATION_NAME}
+        name: ${APPLICATION_NAME}
+      spec:
+        containers:
+        - env:
+          - name: MYSQL_ROOT_PASSWORD
+            value: ${MYSQL_PWD}
+          image: ${APPLICATION_NAME}:latest
+          name: ${APPLICATION_NAME}
+          ports:
+          - containerPort: 3306
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            successThreshold: 1
+            tcpSocket:
+             port: 3306
+          timeoutSeconds: 5
+          volumeMounts:
+          - mountPath: /var/lib/mysql  #注意这里的挂载目录有些mysql数据库修改了配置目录是/var/lib/mysql/data，挂错了目录导致容器无法启动
+            name: ${APPLICATION_NAME}-volume
+        terminationGracePeriodSeconds: 60
+        volumes:
+        - name: ${APPLICATION_NAME}-volume
+          persistentVolumeClaim:
+            claimName: ${APPLICATION_NAME}-volume-claim
+    triggers:
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${APPLICATION_NAME}
+        from:
+          kind: ImageStreamTag
+          name: ${APPLICATION_NAME}:latest
+      type: ImageChange
+    - type: ConfigChange
+
+#定义mysql pvc
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}-volume-claim
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${VOLUME_CAPACITY}
+
+#定义mysql pv
+- apiVersion: v1
+  kind: PersistentVolume
+  metadata:
+    name: ${APPLICATION_NAME}-volume
+    labels:
+      application: ${APPLICATION_NAME}
+  spec:
+    nfs:
+      path: /mnt/nfs_data/volumes/${APPLICATION_NAME}
+      server: ${NFS_HOST}
+    accessModes:
+    - ReadWriteOnce
+    persistentVolumeReclaimPolicy: Retain
+    capacity:
+      storage: ${VOLUME_CAPACITY}
+
+parameters:
+- description: The name for the application.
+  displayName: Application Name
+  name: APPLICATION_NAME
+  required: true
+- description: Git source URI for mysql
+  displayName: Git Repository URL
+  name: MYSQL_REPOSITORY_URL
+  required: true
+  value: http://git.tsd.cloudtogo.local/fjw/java_mysql.git
+- description: Git branch/tag mysql dockerfile
+  displayName: Git Mysql Dockerfile Reference
+  name: MYSQL_REPOSITORY_REF
+  value: master
+- description: Path within Git project to build,empty for root project directory
+  displayName: Context Directory #git子项目路径，没有子项目就不填
+  name: CONTEXT_DIR
+- description: Database user password
+  displayName: Database Password
+  name: MYSQL_PWD
+  required: true
+- description: ImageStream Namespace
+  displayName: ImageStream Namespace
+  name: IMAGE_STREAM_NAMESPACE
+  required: true
+  value: openshift
+- description: volume size. eg:512Mi,1Gi
+  displayName: VOLUME_CAPACITY
+  name: VOLUME_CAPACITY
+  required: true
+  value: 1Gi
+- description: input nfs host or ipaddress
+  displayName: nfs host
+  name: NFS_HOST
+  required: true
+  value: 10.10.15.20
+- description: The tag to use for the "mysql" image stream
+  displayName: MySQL Image Stream Tag
+  name: MYSQL_IMAGE_STREAM_TAG
+  required: true
+  value: "5.7"
